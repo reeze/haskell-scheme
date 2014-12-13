@@ -1,7 +1,7 @@
 import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
 import Control.Monad
-import Control.Monad.Error
+import Control.Monad.Except
 
 spaces :: Parser ()
 spaces = skipMany1 space 
@@ -35,10 +35,6 @@ showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 instance Show LispError where show = showError
 
 type ThrowsError = Either LispError
-
-instance Error LispError where
-	noMsg = Default "An error has occurred"
-	strMsg = Default
 
 trapError action = catchError action (return . show)
 
