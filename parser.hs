@@ -12,6 +12,7 @@ data LispVal = Atom String
 			 | DottedList [LispVal] LispVal
 			 | Number Integer
 			 | String String
+			 | Nil
 			 | Bool Bool
 
 data LispError = NumArgs Integer [LispVal]
@@ -107,6 +108,7 @@ showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++ showVal tail ++ ")"
+showVal (Nil) = "Nil"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
@@ -147,6 +149,8 @@ primitives = [("+", numericBinop (+)),
 			  ("<=", numBoolBinop (<=)),
 			  ("&&", boolBoolBinop(&&)),
 			  ("||", boolBoolBinop(||)),
+			  ("car", car),
+			  ("cdr", cdr),
 			  ("string=?", strBoolBinop(==)),
 			  ("string<?", strBoolBinop(<)),
 			  ("string>?", strBoolBinop(<)),
@@ -191,6 +195,20 @@ unpackStr (String s) = return s
 unpackStr (Number s) = return $ show s
 unpackStr (Bool s) = return $ show s
 unpackStr notString = throwError $ TypeMismatch "string" notString
+
+car :: [LispVal] -> ThrowsError LispVal
+car [List (x:xs)] = return x
+car [DottedList (x:xs) _] = return x
+car [badArg]    = throwError $ TypeMismatch "pair" badArg
+car badArgList  = throwError $ NumArgs 1 badArgList
+
+cdr :: [LispVal] -> ThrowsError LispVal
+cdr [List (_:xs)] = return $ List xs
+cdr [List (x)] = return Nil
+cdr [DottedList [_] x]      = return x
+cdr [badArg] = throwError $ TypeMismatch "pair" badArg
+cdr badArgList = throwError $ NumArgs 1 badArgList
+
 
 main :: IO ()
 main = do
