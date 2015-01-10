@@ -287,6 +287,10 @@ unpackEquals arg1 arg2 (AnyUnpacker unpacker) =
   `catchError` (const $ return False)
 
 equal :: [LispVal] -> ThrowsError LispVal
+equal [(List x1), (List x2)] = return $ Bool $ (length x1 == length x2) && (all eqvPair $ zip x1 x2)
+	where eqvPair (l, r) = case equal [l, r] of
+		Left err -> False
+		Right (Bool val) -> val
 equal [x1, x2] = do
   primitiveEquals <- liftM or $ mapM (unpackEquals x1 x2)
                      [AnyUnpacker unpackNum, AnyUnpacker unpackBool, AnyUnpacker unpackStr]
