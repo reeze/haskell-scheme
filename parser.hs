@@ -1,3 +1,5 @@
+{-# LANGUAGE ExistentialQuantification #-}
+
 import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
 import Control.Monad
@@ -190,6 +192,10 @@ primitives = [("+", numericBinop (+)),
 			  ("||", boolBoolBinop(||)),
 			  ("car", car),
 			  ("cdr", cdr),
+			  ("cons", cons),
+			  ("eq?", eq),
+			  ("eqv?", eq),
+			  ("equal?", equal),
 			  ("string=?", strBoolBinop(==)),
 			  ("string<?", strBoolBinop(<)),
 			  ("string>?", strBoolBinop(<)),
@@ -242,12 +248,51 @@ car [badArg]    = throwError $ TypeMismatch "pair" badArg
 car badArgList  = throwError $ NumArgs 1 badArgList
 
 cdr :: [LispVal] -> ThrowsError LispVal
-cdr [List (_:xs)] = return $ List xs
-cdr [List (x)] = return Nil
+cdr [List (_:xs)]           = return $ List xs
+cdr [List (x)]              = return Nil
 cdr [DottedList [_] x]      = return x
-cdr [badArg] = throwError $ TypeMismatch "pair" badArg
-cdr badArgList = throwError $ NumArgs 1 badArgList
+cdr [badArg]                = throwError $ TypeMismatch "pair" badArg
+cdr badArgList              = throwError $ NumArgs 1 badArgList
 
+cons :: [LispVal] -> ThrowsError LispVal
+cons [x1, List []]            = return $ List [x1]
+cons [x1, List xs]            = return $ List $ x1 : xs
+cons [x, DottedList xs xlast] = return $ DottedList (x : xs) xlast
+cons [x1, x2]                 = return $ DottedList [x1] x2
+cons badArgList               = throwError $ NumArgs 2 badArgList
+
+
+eq ::[LispVal] -> ThrowsError LispVal
+eq [(Bool x1), (Bool x2)]        = return $ Bool $ x1 == x2
+eq [(Number x1), (Number x2)]    = return $ Bool $ x1 == x2
+eq [(Atom x1), (Atom x2)]        = return $ Bool $ x1 == x2
+eq [(String x1), (String x2)]    = return $ Bool $ x1 == x2
+eq [(List x1), (List x2)]        = return $ Bool $ (length x1 == length x2) && (all eqvPair $ zip x1 x2)
+	where eqvPair (l, r)         = case eq [l, r] of
+		Left err -> False
+		Right (Bool val) -> val
+eq [_, _]                        = return $ Bool False
+eq badArgList                    = throwError $ NumArgs 2 badArgList
+
+
+
+-- equal?
+data Unpacker = forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals arg1 arg2 (AnyUnpacker unpacker) =
+    do unpacked1 <- unpacker arg1
+       unpacked2 <- unpacker arg2
+       return  $ unpacked1 == unpacked2
+  `catchError` (const $ return False)
+
+equal :: [LispVal] -> ThrowsError LispVal
+equal [x1, x2] = do
+  primitiveEquals <- liftM or $ mapM (unpackEquals x1 x2)
+                     [AnyUnpacker unpackNum, AnyUnpacker unpackBool, AnyUnpacker unpackStr]
+  eqEquals <- eq [x1, x2]
+  return $ Bool $ (primitiveEquals || let (Bool x) = eqEquals in x)
+equal badArgList = throwError $ NumArgs 2 badArgList
 
 main :: IO ()
 main = do
