@@ -1,7 +1,7 @@
 import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
 import Control.Monad
-import Control.Monad.Except
+import Control.Monad.Error
 import System.IO
 
 flushStr :: String -> IO ()
@@ -15,6 +15,7 @@ evalString :: String -> IO String
 evalString expr = return $ extractValue $ trapError (liftM show $ readExpr expr >>= eval)
 
 evalAndPrint :: String -> IO ()
+evalAndPrint "" = putStrLn ""
 evalAndPrint expr = evalString expr >>= putStrLn
 
 until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
@@ -26,7 +27,7 @@ until_ pred prompt action = do
 
 
 runRepl :: IO ()
-runRepl = until_ (== "quite") (readPrompt "Lisp>>> ") evalAndPrint
+runRepl = until_ (== "quit") (readPrompt "Lisp>>> ") evalAndPrint
 
 spaces :: Parser ()
 spaces = skipMany1 space 
@@ -55,10 +56,22 @@ showError (NotFunction message func)    = message ++ ": " ++ show func
 showError (NumArgs expected found)      = "Expected " ++ show expected
                                        ++ " args; found values " ++ unwordsList found
 showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected
-                                       ++ ", found " ++ show found
+                                       ++ ", found " ++ showType found
 showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 
 instance Show LispError where show = showError
+
+
+showType :: LispVal -> String
+showType val = case val of
+	(Atom str) -> "atom"
+	(List lst) -> "list" 
+	(DottedList dlst v) -> "dlist"
+	(Number num) -> "number"
+	(String str) -> "string" 
+	(Nil) -> "nil"
+	(Bool b) -> "boolean"
+	other -> "unknown"
 
 type ThrowsError = Either LispError
 
@@ -149,7 +162,8 @@ eval (List [Atom "if", pred, yescond, nocond]) =
                                                do result <- eval pred
                                                   case result of
                                                        Bool False -> eval nocond
-                                                       otherwise -> eval yescond
+                                                       Bool True -> eval yescond
+                                                       other -> throwError $ TypeMismatch "Pred must be boolean" other
 eval (List [Atom "quote", val]) = return val
 eval (List (Atom func : args)) = mapM eval args >>= apply func
 eval badForm = throwError $ BadSpecialForm "Unrecogizaed special form" badForm
