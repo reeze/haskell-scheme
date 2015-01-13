@@ -128,7 +128,6 @@ showType val = case val of
 	(String str) -> "string" 
 	(Nil) -> "nil"
 	(Bool b) -> "boolean"
-	other -> "unknown"
 
 type ThrowsError = Either LispError
 
